@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  fullName    String
+  displayName String?
+  email       String   @unique
+  password    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  transactions  Transaction[]
+  familyMembers FamilyMember[]
+  splits        Split[]
+  ownedFamilies Family[]
+
+  @@map("users")
+}
+
+model Family {
+  id           String         @id @default(uuid())
+  name         String
+  ownerId      String
+  owner        User           @relation(fields: [ownerId], references: [id])
+  members      FamilyMember[]
+  transactions Transaction[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id       String     @id @default(uuid())
+  familyId String
+  family   Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     FamilyRole @default(MEMBER)
+  joinedAt DateTime   @default(now())
+
+  @@unique([familyId, userId])
+  @@map("family_members")
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  type        TransactionType
+  amount      Decimal
+  description String
+  date        DateTime        @default(now())
+  category    String?
+  isPersonal  Boolean         @default(true)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  familyId String?
+  family   Family? @relation(fields: [familyId], references: [id])
+
+  splits Split[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transactions")
+}
+
+model Split {
+  id            String      @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  amount        Decimal
+  percentage    Decimal     @default(0)
+
+  @@unique([transactionId, userId])
+  @@map("splits")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum FamilyRole {
+  OWNER
+  MEMBER
+}
