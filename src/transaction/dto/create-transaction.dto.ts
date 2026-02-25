@@ -1,4 +1,3 @@
-// src/transaction/dto/create-transaction.dto.ts
 import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsBoolean, IsDateString, ValidateIf, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TransactionType, SplitType } from '@prisma/client';
@@ -10,11 +9,11 @@ class SplitItemDto {
 
   @IsOptional()
   @IsNumber()
-  percentage?: number;   // usado no PERCENTAGE
+  percentage?: number;
 
   @IsOptional()
   @IsNumber()
-  amount?: number;       // usado no MANUAL
+  amount?: number;
 }
 
 export class CreateTransactionDto {
@@ -36,24 +35,23 @@ export class CreateTransactionDto {
 
   @IsString()
   @IsOptional()
-  category?: string;
+  categoryId?: string;   // ← MUDADO: agora é categoryId (relação)
 
   @IsBoolean()
   @IsOptional()
-  isPersonal?: boolean;
+  isPersonal?: boolean = true;
 
-  // ==================== CAMPOS NOVOS PARA RATEIO FAMILIAR ====================
   @IsString()
   @IsOptional()
   familyId?: string;
 
   @IsEnum(SplitType)
-  @ValidateIf(o => o.familyId)           // obrigatório só se for familiar
+  @ValidateIf(o => !!o.familyId)
   @IsNotEmpty()
   splitType?: SplitType;
 
   @IsArray()
-  @ValidateIf(o => o.familyId && (o.splitType === 'PERCENTAGE' || o.splitType === 'MANUAL'))
+  @ValidateIf(o => !!o.familyId && (o.splitType === 'PERCENTAGE' || o.splitType === 'MANUAL'))
   @ValidateNested({ each: true })
   @Type(() => SplitItemDto)
   splits?: SplitItemDto[];

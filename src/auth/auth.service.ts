@@ -1,10 +1,11 @@
 // src/auth/auth.service.ts
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcryptjs';
+import { UserMeDto } from './dto/me.dto';
 
 @Injectable()
 export class AuthService {
@@ -14,8 +15,13 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('E-mail já cadastrado');
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('E-mail já cadastrado');
+    }
 
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
@@ -26,7 +32,13 @@ export class AuthService {
         email: dto.email,
         password: hashedPassword,
       },
-      select: { id: true, fullName: true, displayName: true, email: true },
+      select: {
+        id: true,
+        fullName: true,
+        displayName: true,
+        email: true,
+        createdAt: true,
+      },
     });
 
     return {
@@ -37,7 +49,9 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
 
     if (!user || !(await bcrypt.compare(dto.password, user.password))) {
       throw new UnauthorizedException('E-mail ou senha inválidos');
@@ -51,6 +65,50 @@ export class AuthService {
         displayName: user.displayName,
         email: user.email,
       },
+    };
+  }
+
+  async getMe(userId: string): Promise<UserMeDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        displayName: true,
+        email: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) throw new NotFoundException('Usuário não encontrado');
+
+    const familyMembers = await this.prisma.familyMember.findMany({
+      where: { userId },
+      include: {
+        family: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    const hasFamily = familyMembers.length > 0;
+    const activeFamily = familyMembers[0]; // primeira família como ativa (pode melhorar depois)
+
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      displayName: user.displayName,
+      email: user.email,
+      createdAt: user.createdAt,
+      hasFamily,
+      activeFamilyId: activeFamily?.family.id,
+      activeFamilyName: activeFamily?.family.name,
+      activeFamilyRole: activeFamily?.role,
+      families: familyMembers.map((fm) => ({
+        id: fm.family.id,
+        name: fm.family.name,
+        role: fm.role,
+      })),
     };
   }
 

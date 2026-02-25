@@ -21,7 +21,7 @@ export class UpdateTransactionDto {
 
   @IsString()
   @IsOptional()
-  category?: string;
+  categoryId?: string;     // ← MUDADO: agora é categoryId
 
   @IsBoolean()
   @IsOptional()

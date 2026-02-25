@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ====================== USER ======================
 model User {
   id          String   @id @default(uuid())
   fullName    String
@@ -20,10 +22,12 @@ model User {
   familyMembers FamilyMember[]
   splits        Split[]
   ownedFamilies Family[]
+  categories    Category[] // categorias pessoais
 
   @@map("users")
 }
 
+// ====================== FAMILY ======================
 model Family {
   id           String         @id @default(uuid())
   name         String
@@ -31,12 +35,14 @@ model Family {
   owner        User           @relation(fields: [ownerId], references: [id])
   members      FamilyMember[]
   transactions Transaction[]
+  categories   Category[] // categorias da família
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   @@map("families")
 }
 
+// ====================== FAMILY MEMBER ======================
 model FamilyMember {
   id       String     @id @default(uuid())
   familyId String
@@ -50,43 +56,73 @@ model FamilyMember {
   @@map("family_members")
 }
 
+// ====================== TRANSACTION ======================
 model Transaction {
-  id          String        @id @default(uuid())
+  id          String          @id @default(uuid())
   type        TransactionType
   amount      Decimal
   description String
-  date        DateTime      @default(now())
-  category    String?
-  isPersonal  Boolean       @default(true)
+  date        DateTime        @default(now())
+  isPersonal  Boolean         @default(true)
 
-  userId      String        // ← quem PAGOU de fato a conta (o "credor")
-  user        User          @relation(fields: [userId], references: [id])
+  userId String // quem PAGOU de fato
+  user   User   @relation(fields: [userId], references: [id])
 
-  familyId    String?
-  family      Family?       @relation(fields: [familyId], references: [id])
+  familyId String?
+  family   Family? @relation(fields: [familyId], references: [id])
 
-  splitType   SplitType?    // ← NOVO CAMPO (essencial)
-  splits      Split[]
+  // Nova relação com Category (substitui o campo string antigo)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  splitType SplitType?
+  splits    Split[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("transactions")
 }
 
+// ====================== SPLIT ======================
 model Split {
   id            String      @id @default(uuid())
   transactionId String
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   userId        String
   user          User        @relation(fields: [userId], references: [id])
-  amount        Decimal     // quanto esta pessoa deve contribuir
-  percentage    Decimal     // porcentagem que esta pessoa assume
+  amount        Decimal
+  percentage    Decimal
 
   @@unique([transactionId, userId])
   @@map("splits")
 }
 
+// ====================== CATEGORY ======================
+model Category {
+  id        String          @id @default(uuid())
+  name      String
+  type      TransactionType
+  color     String?
+  icon      String?
+  isDefault Boolean         @default(false)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  familyId String?
+  family   Family? @relation(fields: [familyId], references: [id])
+
+  transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, type, userId])
+  @@unique([name, type, familyId])
+}
+
+// ====================== ENUMS ======================
 enum TransactionType {
   INCOME
   EXPENSE
@@ -97,10 +133,9 @@ enum FamilyRole {
   MEMBER
 }
 
-// ==================== NOVO ENUM ====================
 enum SplitType {
-  EQUAL       // dividir igualmente entre todos os membros
-  PERCENTAGE  // definir % para cada membro
-  MANUAL      // definir valor exato para cada membro
-  SINGLE      // somente uma pessoa paga (sem rateio)
+  EQUAL
+  PERCENTAGE
+  MANUAL
+  SINGLE
 }

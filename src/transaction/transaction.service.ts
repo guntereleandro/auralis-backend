@@ -20,21 +20,22 @@ export class TransactionService {
       return this.createFamilyTransaction(userId, dto);
     }
 
-    // Transação pessoal simples
+    // Transação pessoal
     return this.prisma.transaction.create({
       data: {
         type: dto.type,
         amount: dto.amount,
         description: dto.description,
         date: dto.date ? new Date(dto.date) : undefined,
-        category: dto.category,
+        categoryId: dto.categoryId,
         isPersonal: true,
         userId,
       },
+      include: { category: true, splits: true },
     });
   }
 
-  // ====================== RATEIO FAMILIAR FLEXÍVEL ======================
+  // ====================== TRANSAÇÃO FAMILIAR COM RATEIO FLEXÍVEL ======================
   private async createFamilyTransaction(payerId: string, dto: CreateTransactionDto) {
     if (!dto.familyId || !dto.splitType) {
       throw new BadRequestException('familyId e splitType são obrigatórios para transações familiares');
@@ -51,7 +52,7 @@ export class TransactionService {
         amount: dto.amount,
         description: dto.description,
         date: dto.date ? new Date(dto.date) : undefined,
-        category: dto.category,
+        categoryId: dto.categoryId,
         isPersonal: false,
         userId: payerId,
         familyId: dto.familyId,
@@ -110,41 +111,60 @@ export class TransactionService {
 
     return this.prisma.transaction.findUnique({
       where: { id: transaction.id },
-      include: { 
-        splits: { 
-          include: { user: { select: { id: true, fullName: true, displayName: true } } } 
-        } 
+      include: {
+        category: true,
+        splits: { include: { user: { select: { id: true, fullName: true, displayName: true } } } },
       },
     });
   }
 
-  // ====================== MÉTODOS ANTIGOS (restaurados) ======================
-  async findAll(userId: string) {
+  // ====================== LISTAGEM COM FILTRO ======================
+  async findAll(userId: string, type?: 'personal' | 'family') {
+    const where: any = { userId };
+
+    if (type === 'personal') where.isPersonal = true;
+    if (type === 'family') where.isPersonal = false;
+
     return this.prisma.transaction.findMany({
-      where: { userId },
+      where,
       orderBy: { date: 'desc' },
-      include: { splits: { include: { user: true } } },
+      include: {
+        category: true,
+        splits: { include: { user: true } },
+      },
     });
   }
 
   async findOne(userId: string, id: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },
-      include: { splits: { include: { user: true } } },
+      include: {
+        category: true,
+        splits: { include: { user: true } },
+      },
     });
+
     if (!transaction) throw new NotFoundException('Transação não encontrada');
     return transaction;
   }
 
   async update(userId: string, id: string, dto: UpdateTransactionDto) {
     await this.findOne(userId, id);
+
     return this.prisma.transaction.update({
       where: { id },
       data: {
-        ...dto,
+        type: dto.type,
+        amount: dto.amount,
+        description: dto.description,
         date: dto.date ? new Date(dto.date) : undefined,
+        categoryId: dto.categoryId,
+        isPersonal: dto.isPersonal,
       },
-      include: { splits: true },
+      include: {
+        category: true,
+        splits: true,
+      },
     });
   }
 
@@ -153,7 +173,13 @@ export class TransactionService {
     return this.prisma.transaction.delete({ where: { id } });
   }
 
-  async getMonthlySummary(userId: string, month?: number, year?: number) {
+  // ====================== RESUMO MENSAL COM FILTRO ======================
+  async getMonthlySummary(
+    userId: string,
+    month?: number,
+    year?: number,
+    type?: 'personal' | 'family',
+  ) {
     const now = new Date();
     const targetMonth = month || now.getMonth() + 1;
     const targetYear = year || now.getFullYear();
@@ -161,9 +187,15 @@ export class TransactionService {
     const startDate = new Date(targetYear, targetMonth - 1, 1);
     const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
 
-    const transactions = await this.prisma.transaction.findMany({
-      where: { userId, date: { gte: startDate, lte: endDate } },
-    });
+    const where: any = {
+      userId,
+      date: { gte: startDate, lte: endDate },
+    };
+
+    if (type === 'personal') where.isPersonal = true;
+    if (type === 'family') where.isPersonal = false;
+
+    const transactions = await this.prisma.transaction.findMany({ where });
 
     const totalIncome = transactions
       .filter(t => t.type === 'INCOME')

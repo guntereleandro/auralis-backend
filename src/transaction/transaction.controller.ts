@@ -30,8 +30,11 @@ export class TransactionController {
   }
 
   @Get()
-  findAll(@Req() req: any) {
-    return this.transactionService.findAll(req.user.id);
+  findAll(
+    @Req() req: any,
+    @Query('type') type?: 'personal' | 'family',
+  ) {
+    return this.transactionService.findAll(req.user.id, type);
   }
 
   @Get('summary')
@@ -39,11 +42,13 @@ export class TransactionController {
     @Req() req: any,
     @Query('month') month?: string,
     @Query('year') year?: string,
+    @Query('type') type?: 'personal' | 'family',
   ) {
     return this.transactionService.getMonthlySummary(
       req.user.id,
       month ? +month : undefined,
       year ? +year : undefined,
+      type,
     );
   }
 
