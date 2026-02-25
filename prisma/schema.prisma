@@ -51,24 +51,25 @@ model FamilyMember {
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
+  id          String        @id @default(uuid())
   type        TransactionType
   amount      Decimal
   description String
-  date        DateTime        @default(now())
+  date        DateTime      @default(now())
   category    String?
-  isPersonal  Boolean         @default(true)
+  isPersonal  Boolean       @default(true)
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String        // ← quem PAGOU de fato a conta (o "credor")
+  user        User          @relation(fields: [userId], references: [id])
 
-  familyId String?
-  family   Family? @relation(fields: [familyId], references: [id])
+  familyId    String?
+  family      Family?       @relation(fields: [familyId], references: [id])
 
-  splits Split[]
+  splitType   SplitType?    // ← NOVO CAMPO (essencial)
+  splits      Split[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@map("transactions")
 }
@@ -79,8 +80,8 @@ model Split {
   transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   userId        String
   user          User        @relation(fields: [userId], references: [id])
-  amount        Decimal
-  percentage    Decimal     @default(0)
+  amount        Decimal     // quanto esta pessoa deve contribuir
+  percentage    Decimal     // porcentagem que esta pessoa assume
 
   @@unique([transactionId, userId])
   @@map("splits")
@@ -94,4 +95,12 @@ enum TransactionType {
 enum FamilyRole {
   OWNER
   MEMBER
+}
+
+// ==================== NOVO ENUM ====================
+enum SplitType {
+  EQUAL       // dividir igualmente entre todos os membros
+  PERCENTAGE  // definir % para cada membro
+  MANUAL      // definir valor exato para cada membro
+  SINGLE      // somente uma pessoa paga (sem rateio)
 }

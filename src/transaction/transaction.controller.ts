@@ -26,11 +26,6 @@ export class TransactionController {
   @Post()
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   create(@Req() req: any, @Body() createDto: CreateTransactionDto) {
-    // Se tiver familyId → é transação familiar com rateio
-    if (createDto.familyId) {
-      return this.transactionService.createFamilyTransaction(req.user.id, createDto);
-    }
-    // Senão → transação pessoal normal
     return this.transactionService.create(req.user.id, createDto);
   }
 
