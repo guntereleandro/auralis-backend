@@ -1,4 +1,3 @@
-// src/category/dto/create-category.dto.ts
 import { IsEnum, IsNotEmpty, IsString, IsOptional, IsHexColor } from 'class-validator';
 import { TransactionType } from '@prisma/client';
 
@@ -21,5 +20,10 @@ export class CreateCategoryDto {
 
   @IsString()
   @IsOptional()
-  familyId?: string;   // se for categoria da família (senão é pessoal)
+  familyId?: string;
+
+  // === OFFLINE SUPPORT ===
+  @IsString()
+  @IsOptional()
+  localId?: string;
 }

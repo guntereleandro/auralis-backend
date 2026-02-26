@@ -58,28 +58,32 @@ model FamilyMember {
 
 // ====================== TRANSACTION ======================
 model Transaction {
-  id          String          @id @default(uuid())
-  type        TransactionType
-  amount      Decimal
-  description String
-  date        DateTime        @default(now())
-  isPersonal  Boolean         @default(true)
+  id             String       @id @default(uuid())
+  localId        String?      @unique   // ← gerado no frontend
+  syncStatus     SyncStatus   @default(SYNCED)
+  lastSyncedAt   DateTime?
+  createdLocally Boolean      @default(false)
 
-  userId String // quem PAGOU de fato
-  user   User   @relation(fields: [userId], references: [id])
+  type           TransactionType
+  amount         Decimal
+  description    String
+  date           DateTime     @default(now())
+  isPersonal     Boolean      @default(true)
 
-  familyId String?
-  family   Family? @relation(fields: [familyId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
 
-  // Nova relação com Category (substitui o campo string antigo)
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
+  familyId       String?
+  family         Family?      @relation(fields: [familyId], references: [id])
 
-  splitType SplitType?
-  splits    Split[]
+  categoryId     String?
+  category       Category?    @relation(fields: [categoryId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  splitType      SplitType?
+  splits         Split[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@map("transactions")
 }
@@ -100,23 +104,28 @@ model Split {
 
 // ====================== CATEGORY ======================
 model Category {
-  id        String          @id @default(uuid())
-  name      String
-  type      TransactionType
-  color     String?
-  icon      String?
-  isDefault Boolean         @default(false)
+  id             String       @id @default(uuid())
+  localId        String?      @unique
+  syncStatus     SyncStatus   @default(SYNCED)
+  lastSyncedAt   DateTime?
+  createdLocally Boolean      @default(false)
 
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
+  name           String
+  type           TransactionType
+  color          String?
+  icon           String?
+  isDefault      Boolean      @default(false)
 
-  familyId String?
-  family   Family? @relation(fields: [familyId], references: [id])
+  userId         String?
+  user           User?        @relation(fields: [userId], references: [id])
 
-  transactions Transaction[]
+  familyId       String?
+  family         Family?      @relation(fields: [familyId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  transactions   Transaction[]
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([name, type, userId])
   @@unique([name, type, familyId])
@@ -138,4 +147,11 @@ enum SplitType {
   PERCENTAGE
   MANUAL
   SINGLE
+}
+
+enum SyncStatus {
+  PENDING    // aguardando sincronização
+  SYNCED     // sincronizado com sucesso
+  FAILED     // falha na sincronização
+  CONFLICT   // conflito detectado (precisa de resolução manual)
 }

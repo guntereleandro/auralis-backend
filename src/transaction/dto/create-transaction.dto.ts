@@ -35,7 +35,7 @@ export class CreateTransactionDto {
 
   @IsString()
   @IsOptional()
-  categoryId?: string;   // ← MUDADO: agora é categoryId (relação)
+  categoryId?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -55,4 +55,9 @@ export class CreateTransactionDto {
   @ValidateNested({ each: true })
   @Type(() => SplitItemDto)
   splits?: SplitItemDto[];
+
+  // === OFFLINE SUPPORT ===
+  @IsString()
+  @IsOptional()
+  localId?: string;
 }

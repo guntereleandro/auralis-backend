@@ -8,7 +8,14 @@ export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateCategoryDto) {
-    // Evita duplicata de nome + tipo
+    // Proteção contra duplicata offline
+    if (dto.localId) {
+      const existing = await this.prisma.category.findUnique({
+        where: { localId: dto.localId },
+      });
+      if (existing) return existing;
+    }
+
     const existing = await this.prisma.category.findFirst({
       where: {
         name: dto.name,
@@ -20,9 +27,7 @@ export class CategoryService {
       },
     });
 
-    if (existing) {
-      throw new ConflictException('Já existe uma categoria com este nome e tipo');
-    }
+    if (existing) throw new ConflictException('Categoria com este nome já existe');
 
     return this.prisma.category.create({
       data: {
@@ -30,8 +35,10 @@ export class CategoryService {
         type: dto.type,
         color: dto.color,
         icon: dto.icon,
-        userId: dto.familyId ? null : userId,   // categoria pessoal
-        familyId: dto.familyId,                 // categoria familiar
+        userId: dto.familyId ? null : userId,
+        familyId: dto.familyId,
+        localId: dto.localId,
+        createdLocally: !!dto.localId,
       },
     });
   }
@@ -40,8 +47,8 @@ export class CategoryService {
     return this.prisma.category.findMany({
       where: {
         OR: [
-          { userId }, // categorias pessoais do usuário
-          { family: { members: { some: { userId } } } }, // categorias da família
+          { userId },
+          { family: { members: { some: { userId } } } },
         ],
       },
       orderBy: { name: 'asc' },

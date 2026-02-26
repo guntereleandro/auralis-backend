@@ -16,6 +16,17 @@ export class TransactionService {
 
   // ====================== CREATE PRINCIPAL ======================
   async create(userId: string, dto: CreateTransactionDto) {
+    // Proteção contra duplicata offline
+    if (dto.localId) {
+      const existing = await this.prisma.transaction.findUnique({
+        where: { localId: dto.localId },
+        include: { category: true, splits: true },
+      });
+      if (existing && existing.userId === userId) {
+        return existing; // retorna o registro existente
+      }
+    }
+
     if (dto.familyId && dto.splitType) {
       return this.createFamilyTransaction(userId, dto);
     }
@@ -30,15 +41,26 @@ export class TransactionService {
         categoryId: dto.categoryId,
         isPersonal: true,
         userId,
+        localId: dto.localId,
+        createdLocally: !!dto.localId,
       },
       include: { category: true, splits: true },
     });
   }
 
-  // ====================== TRANSAÇÃO FAMILIAR COM RATEIO FLEXÍVEL ======================
+  // ====================== TRANSAÇÃO FAMILIAR ======================
   private async createFamilyTransaction(payerId: string, dto: CreateTransactionDto) {
     if (!dto.familyId || !dto.splitType) {
-      throw new BadRequestException('familyId e splitType são obrigatórios para transações familiares');
+      throw new BadRequestException('familyId e splitType são obrigatórios');
+    }
+
+    // Proteção contra duplicata offline
+    if (dto.localId) {
+      const existing = await this.prisma.transaction.findUnique({
+        where: { localId: dto.localId },
+        include: { category: true, splits: true },
+      });
+      if (existing && existing.userId === payerId) return existing;
     }
 
     const isMember = await this.prisma.familyMember.findFirst({
@@ -57,6 +79,8 @@ export class TransactionService {
         userId: payerId,
         familyId: dto.familyId,
         splitType: dto.splitType,
+        localId: dto.localId,
+        createdLocally: !!dto.localId,
       },
     });
 
@@ -67,12 +91,7 @@ export class TransactionService {
     });
 
     if (dto.splitType === 'SINGLE') {
-      splitsData = [{
-        transactionId: transaction.id,
-        userId: payerId,
-        amount: dto.amount,
-        percentage: 100,
-      }];
+      splitsData = [{ transactionId: transaction.id, userId: payerId, amount: dto.amount, percentage: 100 }];
     } else if (dto.splitType === 'EQUAL') {
       const share = Number(dto.amount) / members.length;
       splitsData = members.map(m => ({
@@ -83,9 +102,7 @@ export class TransactionService {
       }));
     } else if (dto.splitType === 'PERCENTAGE') {
       const totalPercent = dto.splits!.reduce((sum, s) => sum + (s.percentage || 0), 0);
-      if (Math.abs(totalPercent - 100) > 0.01) {
-        throw new BadRequestException('A soma das porcentagens deve ser exatamente 100%');
-      }
+      if (Math.abs(totalPercent - 100) > 0.01) throw new BadRequestException('Soma das porcentagens deve ser 100%');
       splitsData = dto.splits!.map(s => ({
         transactionId: transaction.id,
         userId: s.userId,
@@ -94,9 +111,7 @@ export class TransactionService {
       }));
     } else if (dto.splitType === 'MANUAL') {
       const totalManual = dto.splits!.reduce((sum, s) => sum + (s.amount || 0), 0);
-      if (Math.abs(totalManual - dto.amount) > 0.01) {
-        throw new BadRequestException('A soma dos valores manuais deve ser igual ao total da transação');
-      }
+      if (Math.abs(totalManual - dto.amount) > 0.01) throw new BadRequestException('Soma dos valores deve ser igual ao total');
       splitsData = dto.splits!.map(s => ({
         transactionId: transaction.id,
         userId: s.userId,
@@ -113,37 +128,29 @@ export class TransactionService {
       where: { id: transaction.id },
       include: {
         category: true,
-        splits: { include: { user: { select: { id: true, fullName: true, displayName: true } } } },
+        splits: { include: { user: true } },
       },
     });
   }
 
-  // ====================== LISTAGEM COM FILTRO ======================
+  // ====================== OUTROS MÉTODOS ======================
   async findAll(userId: string, type?: 'personal' | 'family') {
     const where: any = { userId };
-
     if (type === 'personal') where.isPersonal = true;
     if (type === 'family') where.isPersonal = false;
 
     return this.prisma.transaction.findMany({
       where,
       orderBy: { date: 'desc' },
-      include: {
-        category: true,
-        splits: { include: { user: true } },
-      },
+      include: { category: true, splits: { include: { user: true } } },
     });
   }
 
   async findOne(userId: string, id: string) {
     const transaction = await this.prisma.transaction.findFirst({
       where: { id, userId },
-      include: {
-        category: true,
-        splits: { include: { user: true } },
-      },
+      include: { category: true, splits: { include: { user: true } } },
     });
-
     if (!transaction) throw new NotFoundException('Transação não encontrada');
     return transaction;
   }
@@ -160,11 +167,9 @@ export class TransactionService {
         date: dto.date ? new Date(dto.date) : undefined,
         categoryId: dto.categoryId,
         isPersonal: dto.isPersonal,
+        localId: dto.localId,
       },
-      include: {
-        category: true,
-        splits: true,
-      },
+      include: { category: true, splits: true },
     });
   }
 
@@ -173,13 +178,7 @@ export class TransactionService {
     return this.prisma.transaction.delete({ where: { id } });
   }
 
-  // ====================== RESUMO MENSAL COM FILTRO ======================
-  async getMonthlySummary(
-    userId: string,
-    month?: number,
-    year?: number,
-    type?: 'personal' | 'family',
-  ) {
+  async getMonthlySummary(userId: string, month?: number, year?: number, type?: 'personal' | 'family') {
     const now = new Date();
     const targetMonth = month || now.getMonth() + 1;
     const targetYear = year || now.getFullYear();
@@ -187,11 +186,7 @@ export class TransactionService {
     const startDate = new Date(targetYear, targetMonth - 1, 1);
     const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
 
-    const where: any = {
-      userId,
-      date: { gte: startDate, lte: endDate },
-    };
-
+    const where: any = { userId, date: { gte: startDate, lte: endDate } };
     if (type === 'personal') where.isPersonal = true;
     if (type === 'family') where.isPersonal = false;
 

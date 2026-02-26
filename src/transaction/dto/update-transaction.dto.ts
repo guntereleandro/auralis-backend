@@ -1,4 +1,3 @@
-// src/transaction/dto/update-transaction.dto.ts
 import { IsEnum, IsNumber, IsOptional, IsString, IsBoolean, IsDateString } from 'class-validator';
 import { TransactionType } from '@prisma/client';
 
@@ -21,9 +20,13 @@ export class UpdateTransactionDto {
 
   @IsString()
   @IsOptional()
-  categoryId?: string;     // ← MUDADO: agora é categoryId
+  categoryId?: string;
 
   @IsBoolean()
   @IsOptional()
   isPersonal?: boolean;
+
+  @IsString()
+  @IsOptional()
+  localId?: string;
 }
