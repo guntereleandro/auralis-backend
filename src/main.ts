@@ -16,26 +16,20 @@ async function bootstrap() {
     }),
   );
 
-  // CORS - configurado para desenvolvimento + produção
+  // ✅ CORS mais permissivo para desenvolvimento com celular
   app.enableCors({
-    origin: [
-      'http://localhost:3000',      // React/Vite padrão
-      'http://127.0.0.1:3000',
-      'http://localhost:5173',      // Vite padrão (caso use)
-      process.env.FRONTEND_URL || '*', // variável de ambiente (para produção)
-    ],
+    origin: true,                    // permite qualquer origem (celular, Postman, etc.)
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Porta configurável via .env (melhor prática)
   const port = process.env.PORT || 3001;
 
   await app.listen(port);
 
   console.log(`🚀 Auralis Backend rodando em http://localhost:${port}`);
-  console.log(`🌐 Frontend deve apontar para: http://localhost:${port}`);
+  console.log(`📱 Pronto para acessar pelo celular na mesma rede`);
 }
 
 bootstrap();
